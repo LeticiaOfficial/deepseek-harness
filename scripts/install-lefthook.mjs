@@ -688,8 +688,14 @@ function probePairingMergeDriver(root) {
   capture(process.execPath, PAIRING_MERGE_DRIVER_PROBE, { cwd: root })
 }
 
+function isSubmoduleCheckout() {
+  const probe = spawnSync('git', ['rev-parse', '--show-superproject-working-tree'], { encoding: 'utf8' })
+  return probe.status === 0 && stripGitLineTerminator(probe.stdout) !== ''
+}
+
 async function main() {
   if (process.env.CI === 'true' || process.env.GITHUB_ACTIONS === 'true') return
+  if (isSubmoduleCheckout()) return
   if (typeof lefthookPackage.bin?.lefthook !== 'string') return
   const probe = spawnSync('git', ['rev-parse', '--show-toplevel'], { encoding: 'utf8' })
   if (probe.status !== 0) return

@@ -247,6 +247,26 @@ describe('worktree-local Lefthook installer', { timeout: 90_000 }, () => {
     })
   }
 
+  it('skips hook installation from a Git submodule checkout', async () => {
+    const fixture = createFixture()
+    const source = join(fixture.container, 'submodule-source')
+    const checkout = join(fixture.main, 'component')
+    mkdirSync(source)
+    git(fixture, fixture.container, ['init', source])
+    write(join(source, 'README.md'), '# component\n')
+    git(fixture, source, ['add', 'README.md'])
+    git(fixture, source, ['commit', '-m', 'component fixture'])
+    git(fixture, fixture.main, [
+      '-c', 'protocol.file.allow=always', 'submodule', 'add', source, 'component',
+    ])
+
+    const result = await runInstaller(fixture, checkout)
+
+    expect(result.status, result.stderr).toBe(0)
+    expect(gitResult(fixture, checkout, ['config', '--get', 'extensions.worktreeConfig']).status).toBe(1)
+    expect(git(fixture, checkout, ['config', '--get', 'core.repositoryFormatVersion'])).toBe('0')
+  })
+
   it('isolates main and linked worktrees without changing legacy common hooks', async () => {
     const fixture = createFixture()
     const common = commonDirectory(fixture)
