@@ -26,6 +26,8 @@ import type {
 import { SettingsRoot } from './SettingsRoot.tsx'
 import { CloseLabel, HeaderContent, TriggerContent } from './chrome.tsx'
 import { GeneralSection } from './GeneralSection.tsx'
+import { UsageSection } from './UsageSection.tsx'
+import type { UsageSectionInjected } from './UsageSection.tsx'
 import { SettingsDocumentAction } from './SettingsDocumentAction.tsx'
 import type { SettingsDocumentActionInjected } from './SettingsDocumentAction.tsx'
 import { SettingsDocumentStore } from './settings-document-store.ts'
@@ -180,4 +182,20 @@ export function apply(ctx: ClientContext): void {
     locale: NS,
     children: { 'settings.general.item': { kind: 'list', scope: 'root' } },
   }, GeneralSection))
+  ctx.slots.inject('settings.section', () => ctx.slots.register({
+    name: 'settings.section',
+    id: 'usage',
+    order: 15,
+    label: () => t('usage.nav'),
+    locale: NS,
+    inject: (): UsageSectionInjected => ({
+      loadReport: async () => {
+        const response = await globalThis.fetch('/api/usage-report', { cache: 'no-store' })
+        const body = await response.json() as { error?: string }
+        if (!response.ok) throw new Error(body.error ?? `HTTP ${String(response.status)}`)
+        return body as Awaited<ReturnType<UsageSectionInjected['loadReport']>>
+      },
+      t,
+    }),
+  }, UsageSection))
 }

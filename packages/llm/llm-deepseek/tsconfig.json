@@ -48,6 +48,15 @@
       "path": "../../settings/settings"
     },
     {
+      "path": "../../core/session"
+    },
+    {
+      "path": "../../session-query/session-query"
+    },
+    {
+      "path": "../../host/webserver"
+    },
+    {
       "path": "../../util/timeout"
     },
     {

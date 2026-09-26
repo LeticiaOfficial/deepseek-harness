@@ -1697,7 +1697,13 @@ describe('plugin registration and config', () => {
     await ctx.plugin(LlmDeepSeek, { baseURL: 'http://127.0.0.1:1' })
     expect(ctx.llm.listProviders()).toEqual([{ id: 'deepseek-official', name: 'DeepSeek' }])
     await expect(ctx.llm.listModels('deepseek-official')).resolves.toEqual([
-      { provider: 'deepseek-official', id: 'deepseek-flash', name: 'DeepSeek-V41-Flash', inputModalities: ['text', 'image'] },
+      {
+        provider: 'deepseek-official',
+        id: 'deepseek-flash',
+        name: 'DeepSeek-V4.1-Flash',
+        description: 'Latest DeepSeek V4.1 Flash model with native visual understanding.',
+        inputModalities: ['text', 'image'],
+      },
       {
         provider: 'deepseek-official',
         id: 'deepseek-v4-flash',
@@ -1718,7 +1724,7 @@ describe('plugin registration and config', () => {
       .resolves.toMatchObject({
         provider: 'deepseek-official',
         id: 'deepseek-flash',
-        name: 'DeepSeek-V41-Flash',
+        name: 'DeepSeek-V4.1-Flash',
         inputModalities: ['text', 'image'],
         systemPromptUpdate: 'in-history',
         context: { contextWindow: 1_000_000 },
@@ -1836,7 +1842,13 @@ describe('plugin registration and config', () => {
     await ctx.plugin(LlmRuntime)
     LlmDeepSeek.apply(ctx, { baseURL: 'http://127.0.0.1:1' })
     await expect(ctx.llm.listModels('deepseek-official')).resolves.toEqual([
-      { provider: 'deepseek-official', id: 'deepseek-flash', name: 'DeepSeek-V41-Flash', inputModalities: ['text', 'image'] },
+      {
+        provider: 'deepseek-official',
+        id: 'deepseek-flash',
+        name: 'DeepSeek-V4.1-Flash',
+        description: 'Latest DeepSeek V4.1 Flash model with native visual understanding.',
+        inputModalities: ['text', 'image'],
+      },
       {
         provider: 'deepseek-official',
         id: 'deepseek-v4-flash',

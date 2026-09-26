@@ -1,6 +1,6 @@
 /** Agent activation, composition, and model-selection policy owned by API Session. */
 
-import { mkdir } from 'node:fs/promises'
+import { mkdir, stat } from 'node:fs/promises'
 import type { Context } from '@deepseek-ai/cordis'
 import { installModelSelection } from '@deepseek-ai/dsh-agent'
 import type {
@@ -471,7 +471,18 @@ export class ApiSessionAgentController {
     }
 
     try {
-      await mkdir(cwd, { recursive: true })
+      let existing
+      try {
+        existing = await stat(cwd)
+      } catch (error: unknown) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+      }
+
+      if (existing === undefined) {
+        await mkdir(cwd, { recursive: true })
+      } else if (!existing.isDirectory()) {
+        throw new Error(`path exists and is not a directory: "${cwd}"`)
+      }
     } catch (error: unknown) {
       throw new Error(`failed to ensure project directory "${cwd}": ${String(error)}`, { cause: error })
     }

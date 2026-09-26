@@ -38,7 +38,12 @@ export const sessionFormatV0ToV1 = defineSessionFormatMigration({
 
 class ReleasedV0ToV1Stage implements SessionFormatMigrationStage {
   readonly headerInheritedEventCount: number
-  private readonly state: LegacyNormalizationState = { messageIds: new Map(), retryIds: new Map() }
+  private readonly state: LegacyNormalizationState = {
+    messageIds: new Map(),
+    retryIds: new Map(),
+    openTurn: undefined,
+    pendingSplice: undefined,
+  }
 
   constructor(private readonly input: SessionFormatMigrationStageInput) {
     assertHeaderVersion(input.sourceHeader, 0)
@@ -50,8 +55,42 @@ class ReleasedV0ToV1Stage implements SessionFormatMigrationStage {
     context: SessionFormatMigrationContext,
   ): void {
     const normalized = normalizeReleasedV0Event(event, this.input.sourceHeader.id, this.state)
+    const startTurn = normalized.type === 'turn/start'
+      ? sessionFormatCount(
+        releasedV0Record(normalized.data, `turn/start ${normalized.seq} data`)['turn'],
+        `turn/start ${normalized.seq} turn`,
+      )
+      : undefined
+    if (this.state.pendingSplice !== undefined) {
+      const pending = this.state.openTurn !== undefined && startTurn === this.state.openTurn + 1
+        ? {
+          ...this.state.pendingSplice,
+          type: 'turn/end',
+          data: {
+            turn: this.state.openTurn,
+            reason: { kind: 'aborted', reason: { kind: 'legacy' } },
+          },
+        }
+        : this.state.pendingSplice
+      assertReleasedEventPayload(pending, 0)
+      assertSourceDeliveryMarker(pending, this.input)
+      context.emitEvent(pending)
+      this.state.pendingSplice = undefined
+    }
+    if (normalized.type === 'agent/inbox/spliced') {
+      this.state.pendingSplice = normalized
+      return
+    }
     assertSourceDeliveryMarker(normalized, this.input)
     context.emitEvent(normalized)
+    if (startTurn !== undefined) this.state.openTurn = startTurn
+    if (normalized.type === 'turn/end') {
+      const turn = sessionFormatCount(
+        releasedV0Record(normalized.data, `turn/end ${normalized.seq} data`)['turn'],
+        `turn/end ${normalized.seq} turn`,
+      )
+      if (turn === this.state.openTurn) this.state.openTurn = undefined
+    }
   }
 
   transformRun(
@@ -59,14 +98,25 @@ class ReleasedV0ToV1Stage implements SessionFormatMigrationStage {
     context: SessionFormatMigrationContext,
   ): void {
     if (isReleasedAssistantChunkRun(run)) {
+      this.flushPendingSplice(context)
       context.emitRun(run)
       return
     }
     for (const event of run.expand()) this.transformEvent(event, context)
   }
 
-  finish(_context: SessionFormatMigrationContext): number {
+  finish(context: SessionFormatMigrationContext): number {
+    this.flushPendingSplice(context)
     return this.headerInheritedEventCount
+  }
+
+  private flushPendingSplice(context: SessionFormatMigrationContext): void {
+    const pending = this.state.pendingSplice
+    if (pending === undefined) return
+    assertReleasedEventPayload(pending, 0)
+    assertSourceDeliveryMarker(pending, this.input)
+    context.emitEvent(pending)
+    this.state.pendingSplice = undefined
   }
 }
 
@@ -78,6 +128,8 @@ interface LegacyNormalizationState {
   readonly messageIds: Map<number, string>
   readonly retryIds: Map<string, string>
   compactionId?: string
+  openTurn: number | undefined
+  pendingSplice: SessionFormatEvent | undefined
 }
 
 function normalizeReleasedV0Event(
@@ -91,10 +143,13 @@ function normalizeReleasedV0Event(
   const end = normalizeLegacyTurnEnd(start, sessionId)
   const header = normalizeLegacyRequestHeader(end, sessionId)
   const steering = normalizeLegacySteering(header, sessionId)
-  const retry = normalizeLegacyRetry(steering, sessionId, state.retryIds)
+  const descriptor = normalizeLegacySubagentDescriptor(steering)
+  const retry = normalizeLegacyRetry(descriptor, sessionId, state.retryIds)
   const compaction = normalizeLegacyCompaction(retry, sessionId, state)
   const message = normalizeLegacyMessage(compaction, sessionId, state.messageIds)
-  if (message.type !== 'assistant/chunk') assertReleasedEventPayload(message, 0)
+  if (message.type !== 'assistant/chunk' && message.type !== 'agent/inbox/spliced') {
+    assertReleasedEventPayload(message, 0)
+  }
   const messageId = eventMessageId(message)
   if (messageId !== undefined) state.messageIds.set(message.seq, messageId)
   return message
@@ -203,6 +258,13 @@ function addLegacyCompactionId(
   const data = releasedV0Record(event.data, `${event.type} ${event.seq} data`)
   if (Object.hasOwn(data, 'compactionId')) return event
   return { ...event, data: { ...data, compactionId } }
+}
+
+function normalizeLegacySubagentDescriptor(event: SessionFormatEvent): SessionFormatEvent {
+  if (event.type !== 'subagent/descriptor') return event
+  const data = releasedV0Record(event.data, `subagent/descriptor ${event.seq} data`)
+  if (data['version'] !== 2) return event
+  return { ...event, data: { ...data, version: 3 } }
 }
 
 function normalizeLegacyRequestHeader(event: SessionFormatEvent, sessionId: string): SessionFormatEvent {

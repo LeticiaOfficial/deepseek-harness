@@ -12,6 +12,7 @@
  */
 
 import { spawn, type ChildProcess } from 'node:child_process'
+import { writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import { networkInterfaces } from 'node:os'
@@ -260,6 +261,10 @@ export function apply(ctx: Context, config: Config): void {
         if (ANNOUNCED_ROOTS.has(connectionCtx.root)) return
         const webUrl = localWebUrl(connectionCtx)
         const authenticatedUrl = connectionCtx.connection.authenticatedUrl(webUrl)
+        const launchUrlFile = process.env.DSH_LAUNCH_URL_FILE
+        if (launchUrlFile !== undefined && launchUrlFile !== '') {
+          writeFileSync(launchUrlFile, authenticatedUrl, { encoding: 'utf8', mode: 0o600 })
+        }
         // Reuse the exact LAN snapshot provided to the /api trust fence.
         const lanCandidate = runtime.lanAddresses[0]
         const port = connectionCtx.webServer.port

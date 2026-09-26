@@ -44,6 +44,7 @@ import {
   DEFAULT_REQUEST_IMAGE_MAX_BYTES,
   DEFAULT_REQUEST_IMAGE_PIXEL_BUDGET,
 } from './request-pricing.ts'
+import { registerUsageReportRoute } from './usage-report.ts'
 
 export {
   DEFAULT_CONTEXT_WINDOW,
@@ -92,7 +93,8 @@ const PROVIDER = 'deepseek-official'
 const DEFAULT_MODELS: DeepSeekCatalogModel[] = [
   {
     id: 'deepseek-flash',
-    name: 'DeepSeek-V41-Flash',
+    name: 'DeepSeek-V4.1-Flash',
+    description: 'Latest DeepSeek V4.1 Flash model with native visual understanding.',
     contextWindow: DEFAULT_CONTEXT_WINDOW,
     inputModalities: ['text', 'image'],
     imagePixelBudget: DEFAULT_REQUEST_IMAGE_PIXEL_BUDGET,
@@ -483,6 +485,10 @@ export function apply(ctx: Context, config: Config): void {
       return extensions?.prepare(request)
         ?? Promise.resolve({ fields: {}, accept: () => Promise.resolve() })
     },
+  })
+  registerUsageReportRoute(ctx, () => {
+    const connection = options()
+    return { baseURL: connection.baseURL, apiKeyEnv: String(connection.apiKeyEnv) }
   })
   ctx.llm.registerConfigurableProviders([
     { provider: PROVIDER, displayName: 'DeepSeek', settingsNs: NS, settingsPath: [] },

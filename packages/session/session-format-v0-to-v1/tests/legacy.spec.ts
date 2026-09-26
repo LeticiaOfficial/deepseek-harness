@@ -212,6 +212,34 @@ describe('released v0 legacy normalization', () => {
     expect(migrate(rows).events).toEqual(rows)
   })
 
+  it('promotes released descriptor version 2 to the compatible current version', () => {
+    const event = {
+      type: 'subagent/descriptor', seq: 0, time: 1,
+      data: { version: 2, mode: 'one-shot', provider: 'spawn', label: 'child' },
+    }
+    expect(migrate([event]).events[0]).toEqual({
+      ...event,
+      data: { ...event.data, version: 3 },
+    })
+  })
+
+  it('repairs the legacy queued-input boundary that omitted an interrupted turn ending', () => {
+    const rows = [
+      { type: 'turn/start', seq: 0, time: 1, data: { turn: 1 } },
+      { type: 'step/start', seq: 1, time: 2, data: { turn: 1, step: 1 } },
+      { type: 'step/end', seq: 2, time: 3, data: { turn: 1, step: 1 } },
+      { type: 'agent/inbox/spliced', seq: 3, time: 4, data: { count: 1 } },
+      { type: 'turn/start', seq: 4, time: 5, data: { turn: 2 } },
+      { type: 'turn/end', seq: 5, time: 6, data: { turn: 2, reason: { kind: 'completed' } } },
+    ]
+    expect(migrate(rows).events[3]).toEqual({
+      type: 'turn/end',
+      seq: 3,
+      time: 4,
+      data: { turn: 1, reason: { kind: 'aborted', reason: { kind: 'legacy' } } },
+    })
+  })
+
   it('refuses wrong-version headers and additional malformed legacy branches', () => {
     expect(() => sessionFormatV0ToV1.migrateHeader({
       version: 1, id: 'x', createdAt: 1, isSeeded: false, delegationDepth: 0,
